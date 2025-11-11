@@ -11,22 +11,48 @@ import { DistributorOrders } from "./distributor-orders"
 
 export function ManufacturerDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
-  const [dashboardStats, setDashboardStats] = useState({ activeOrders: 0, totalProducts: 0 })
+  const [dashboardStats, setDashboardStats] = useState({
+    activeOrders: 0,
+    totalProducts: 0,
+  })
   const [recentOrders, setRecentOrders] = useState<any[]>([])
 
   useEffect(() => {
     const fetchStats = async () => {
-      const ordersRes = await fetch("/api/orders")
-      const ordersData = await ordersRes.json()
-      const productsRes = await fetch("/api/products")
-      const productsData = await productsRes.json()
+      try {
+        // Fetch manufacturer orders (to/from farmers)
+        const ordersRes = await fetch("/api/orders", { credentials: "include" })
+        const ordersData = await ordersRes.json()
 
-      setDashboardStats({
-        activeOrders: ordersData.orders.length,
-        totalProducts: productsData.products.length,
-      })
+        // Fetch distributor→manufacturer orders
+        const distributorRes = await fetch("/api/manufacturer/distributor-orders", { credentials: "include" })
+        const distributorData = await distributorRes.json()
 
-      setRecentOrders(ordersData.orders.slice(0, 5))
+        // Fetch products
+        const productsRes = await fetch("/api/products", { credentials: "include" })
+        const productsData = await productsRes.json()
+
+        // Combine all orders related to this manufacturer
+        const allOrders = [
+          ...(ordersData.orders || []),
+          ...(distributorData.orders || []),
+        ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+        const activeOrdersCount = allOrders.filter(
+          (o) => o.status === "pending" || o.status === "confirmed"
+        ).length
+
+        setDashboardStats({
+          activeOrders: activeOrdersCount,
+          totalProducts: productsData.products?.length || 0,
+        })
+
+        setRecentOrders(allOrders.slice(0, 5))
+      } catch (error) {
+        console.error("Dashboard data load error:", error)
+        setDashboardStats({ activeOrders: 0, totalProducts: 0 })
+        setRecentOrders([])
+      }
     }
 
     fetchStats()
@@ -36,8 +62,12 @@ export function ManufacturerDashboard() {
     <div className="min-h-screen bg-muted/30">
       <div className="bg-background border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-serif font-bold text-foreground">Manufacturer Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage vegetable sourcing and orders from farmers</p>
+          <h1 className="text-3xl font-serif font-bold text-foreground">
+            Manufacturer Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage sourcing from farmers and distributor orders
+          </p>
         </div>
       </div>
 
@@ -50,6 +80,7 @@ export function ManufacturerDashboard() {
             <TabsTrigger value="distributor">Distributor Orders</TabsTrigger>
           </TabsList>
 
+          {/* OVERVIEW TAB */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
@@ -59,7 +90,9 @@ export function ManufacturerDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{dashboardStats.activeOrders}</div>
-                  <p className="text-xs text-muted-foreground">Vegetable orders</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pending & confirmed orders
+                  </p>
                 </CardContent>
               </Card>
 
@@ -70,7 +103,7 @@ export function ManufacturerDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{dashboardStats.totalProducts}</div>
-                  <p className="text-xs text-muted-foreground">Vegetable types</p>
+                  <p className="text-xs text-muted-foreground">Manufactured products</p>
                 </CardContent>
               </Card>
             </div>
@@ -78,50 +111,65 @@ export function ManufacturerDashboard() {
             <div className="grid grid-cols-1 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Recent Vegetable Orders</CardTitle>
+                  <CardTitle>Recent Orders</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recentOrders.map((order) => (
-                      <div
-                        key={order._id}
-                        className="flex items-center justify-between p-3 border border-border rounded-lg"
-                      >
-                        <div className="space-y-1">
-                          <p className="font-medium">{order.productName}</p>
-                          <p className="text-sm text-muted-foreground">{order.sellerName}</p>
-                          <p className="text-sm text-muted-foreground">{order.quantity} {order.unit}</p>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <Badge
-                            variant={
-                              order.status === "pending"
-                                ? "secondary"
-                                : order.status === "confirmed"
+                    {recentOrders.length > 0 ? (
+                      recentOrders.map((order) => (
+                        <div
+                          key={order._id}
+                          className="flex items-center justify-between p-3 border border-border rounded-lg"
+                        >
+                          <div className="space-y-1">
+                            <p className="font-medium">{order.productName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Buyer: {order.buyerName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {order.quantity} {order.unit}
+                            </p>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <Badge
+                              variant={
+                                order.status === "pending"
+                                  ? "secondary"
+                                  : order.status === "confirmed"
                                   ? "default"
                                   : "outline"
-                            }
-                          >
-                            {order.status}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground">Due: {new Date(order.shippingDate).toLocaleDateString()}</p>
+                              }
+                            >
+                              {order.status}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.orderDate).toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <p className="text-center text-muted-foreground py-4">
+                        No recent orders
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
+          {/* SOURCING TAB */}
           <TabsContent value="sourcing">
             <ProductSourcing />
           </TabsContent>
 
+          {/* MANUFACTURER -> FARMER ORDERS */}
           <TabsContent value="orders">
             <OrderManagement />
           </TabsContent>
 
+          {/* DISTRIBUTOR -> MANUFACTURER ORDERS */}
           <TabsContent value="distributor">
             <DistributorOrders />
           </TabsContent>

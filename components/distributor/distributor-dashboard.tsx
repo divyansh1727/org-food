@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import PlaceOrder from "./place-order"
 import InventoryManagement from "./inventory-management"
 import RetailerOrders from "./retailer-orders"
-import LogisticsCoordination from "./logistics-coordination"
+// import LogisticsCoordination from "./logistics-coordination"
 
 export default function DistributorDashboard() {
   const [activeTab, setActiveTab] = useState("place-order")
@@ -17,7 +17,7 @@ export default function DistributorDashboard() {
         <div className="max-w-7xl mx-auto">
           <h1 className="text-3xl font-serif font-bold text-foreground">Distributor Dashboard</h1>
           <p className="text-muted-foreground mt-1">
-            Manage inventory, retailer orders, logistics, and place new orders to manufacturers.
+            Manage inventory, retailer orders,  and place new orders to manufacturers.
           </p>
         </div>
       </div>
@@ -28,7 +28,7 @@ export default function DistributorDashboard() {
             <TabsTrigger value="place-order">Place Order</TabsTrigger>
             <TabsTrigger value="inventory">Inventory</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
-            <TabsTrigger value="logistics">Logistics</TabsTrigger>
+            {/* <TabsTrigger value="logistics">Logistics</TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="place-order">
@@ -43,9 +43,9 @@ export default function DistributorDashboard() {
             <RetailerOrders />
           </TabsContent>
 
-          <TabsContent value="logistics">
+          {/* <TabsContent value="logistics">
             <LogisticsCoordination />
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       </div>
     </div>

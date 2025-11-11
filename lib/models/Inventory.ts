@@ -1,20 +1,20 @@
-import type { ObjectId } from "mongodb"
+import { ObjectId } from "mongodb"
 
 export interface InventoryItem {
   _id?: ObjectId
   productId: ObjectId
+  productName: string
   supplierId: ObjectId
+  supplierName: string
   batchNumber: string
   quantity: number
   unit: string
-  expiryDate?: Date
+  pricePerUnit?: number
   location: string
-  status: "available" | "reserved" | "sold" | "expired"
-  qualityGrade: "A" | "B" | "C"
-  storageConditions?: {
-    temperature?: number
-    humidity?: number
-  }
+  // ✅ Added "pending" to the union type
+  status: "available" | "reserved" | "sold" | "expired" | "pending"
+  ownerId: ObjectId
+  ownerName: string
   createdAt: Date
   updatedAt: Date
 }

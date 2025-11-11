@@ -4,6 +4,9 @@ import type { Product } from "@/lib/models/Product";
 import { ObjectId } from "mongodb";
 import { verifyAuth } from "@/lib/auth";
 
+/* =========================================
+   GET → Fetch products (for all roles)
+========================================= */
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request);
@@ -33,6 +36,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/* =========================================
+   POST → Create new product (Farmer only)
+========================================= */
 export async function POST(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request);
@@ -67,10 +73,13 @@ export async function POST(request: NextRequest) {
     const db = await getDatabase();
     const productsCollection = db.collection<Product>("products");
 
+    // ✅ Add ownerId and ownerName (this is the key fix)
     const newProduct: Omit<Product, "_id"> = {
       ...productData,
       farmerId: new ObjectId(user._id as any),
       farmerName: user.name,
+      ownerId: new ObjectId(user._id as any),      // ✅ added
+      ownerName: user.name,                        // ✅ added
       quantity: Number(productData.quantity),
       unit: String(productData.unit),
       pricePerUnit: Number(productData.pricePerUnit),
@@ -86,7 +95,10 @@ export async function POST(request: NextRequest) {
     const result = await productsCollection.insertOne(newProduct);
 
     return NextResponse.json(
-      { message: "Product created successfully", product: { ...newProduct, _id: result.insertedId } },
+      {
+        message: "Product created successfully",
+        product: { ...newProduct, _id: result.insertedId },
+      },
       { status: 201 }
     );
   } catch (error) {

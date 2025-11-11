@@ -1,3 +1,4 @@
+// hooks/use-api.ts
 "use client"
 
 import { useState, useEffect } from "react"
@@ -7,6 +8,21 @@ interface ApiResponse<T> {
   loading: boolean
   error: string | null
   refetch: () => void
+}
+
+function getAuthToken(): string | null {
+  try {
+    // prefer localStorage
+    const ls = typeof window !== "undefined" ? localStorage.getItem("auth-token") : null
+    if (ls) return ls
+
+    // fallback to cookie
+    if (typeof document !== "undefined") {
+      const cookie = document.cookie.split(";").find((c) => c.trim().startsWith("auth-token="))
+      if (cookie) return cookie.split("=")[1]
+    }
+  } catch (e) {}
+  return null
 }
 
 export function useApi<T>(url: string, options?: RequestInit): ApiResponse<T> {
@@ -19,16 +35,20 @@ export function useApi<T>(url: string, options?: RequestInit): ApiResponse<T> {
       setLoading(true)
       setError(null)
 
+      const token = getAuthToken()
+
       const response = await fetch(url, {
         ...options,
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...options?.headers,
         },
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errBody = await response.json().catch(() => ({}))
+        throw new Error(errBody.error || `HTTP error! status: ${response.status}`)
       }
 
       const result = await response.json()
@@ -42,16 +62,20 @@ export function useApi<T>(url: string, options?: RequestInit): ApiResponse<T> {
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
   return { data, loading, error, refetch: fetchData }
 }
 
 export async function apiCall<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken()
+
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   })

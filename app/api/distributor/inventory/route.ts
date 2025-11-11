@@ -1,35 +1,42 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { getDatabase } from "@/lib/mongodb"
-import { verifyAuth } from "@/lib/auth"
-import { ObjectId } from "mongodb"
+import { NextRequest, NextResponse } from "next/server";
+import { getDatabase } from "@/lib/mongodb";
+import { verifyAuth } from "@/lib/auth";
+import { ObjectId } from "mongodb";
 
+/**
+ * ======================================
+ * GET → Fetch Distributor Inventory (available items)
+ * ======================================
+ */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await verifyAuth(request)
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const auth = await verifyAuth(request);
+    if (!auth.success)
+      return NextResponse.json({ error: auth.error }, { status: 401 });
+
+    const user = auth.user!;
+    if (user.role.toLowerCase() !== "distributor") {
+      return NextResponse.json(
+        { error: "Access denied: Only distributors can view this inventory." },
+        { status: 403 }
+      );
     }
 
-    const user = auth.user
-    if (user.role !== "distributor") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const db = await getDatabase();
+    const inventory = db.collection("distributor_inventory");
 
-    const db = await getDatabase()
-    const orders = db.collection("orders")
-
-    // Show all orders where this distributor is the buyer
-    const inventory = await orders
+    // ✅ Show only "available" products belonging to the distributor
+    const items = await inventory
       .find({
-        buyerId: new ObjectId(user._id),
-        sellerRole: "manufacturer",
+        ownerId: new ObjectId(user._id),
+        status: "available",
       })
       .sort({ createdAt: -1 })
-      .toArray()
+      .toArray();
 
-    return NextResponse.json({ inventory })
-  } catch (err) {
-    console.error("Distributor inventory GET error:", err)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ inventory: items }, { status: 200 });
+  } catch (error) {
+    console.error("❌ GET /api/distributor/inventory error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
