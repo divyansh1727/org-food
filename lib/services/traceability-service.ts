@@ -1,6 +1,10 @@
+"use server";
+
 import { getDatabase } from "@/lib/mongodb";
+import { ObjectId } from "mongodb";
 import type { TraceabilityRecord } from "@/lib/models/TraceabilityRecord";
 
+// Add record
 export async function addTraceabilityRecord(
   data: Omit<TraceabilityRecord, "_id" | "createdAt" | "timestamp">
 ) {
@@ -14,6 +18,17 @@ export async function addTraceabilityRecord(
     verificationStatus: data.verificationStatus || "pending",
   };
 
-  await collection.insertOne(record);
-  return record;
+  const result = await collection.insertOne(record);
+  return { ...record, _id: result.insertedId };
+}
+
+// Get product journey
+export async function getProductJourney(productId: string) {
+  const db = await getDatabase();
+  const collection = db.collection<TraceabilityRecord>("traceability");
+
+  return await collection
+    .find({ productId: new ObjectId(productId) })
+    .sort({ timestamp: -1 })
+    .toArray();
 }

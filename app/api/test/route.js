@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
+import { getDatabase } from "@/lib/mongodb";
 
 export async function GET() {
-  await connectDB();
+  await getDatabase(); // This initializes the database connection
   return NextResponse.json({ message: "DB connected!" });
 }

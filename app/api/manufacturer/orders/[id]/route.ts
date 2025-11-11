@@ -1,3 +1,4 @@
+import { addTraceabilityRecord ,getProductJourney} from "@/lib/services/traceability-service";
 import { type NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 import type { Order } from "@/lib/models/Order";
@@ -5,7 +6,6 @@ import type { Product } from "@/lib/models/Product";
 import type { TraceabilityRecord } from "@/lib/models/TraceabilityRecord";
 import { ObjectId } from "mongodb";
 import { verifyAuth } from "@/lib/auth";
-import { addTraceabilityRecord } from "@/lib/services/traceability-service";
 
 export async function PATCH(
   request: NextRequest,
@@ -17,8 +17,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ✅ FIX: TS-safe user extraction
-    const user = authResult.user as NonNullable<typeof authResult.user>;
+    const user = authResult.user;
     const orderId = params.id;
 
     if (!ObjectId.isValid(orderId)) {
@@ -42,10 +41,12 @@ export async function PATCH(
     const products = db.collection<Product>("products");
 
     const order = await orders.findOne({ _id: new ObjectId(orderId) });
-    if (!order)
+    if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
 
-    const userId = new ObjectId(String(user._id)); // ✅ TS-safe ObjectId conversion
+    const userId = new ObjectId(String(user._id));
+
     const isSeller = order.sellerId.toString() === userId.toString();
     const isBuyer = order.buyerId.toString() === userId.toString();
 
@@ -56,6 +57,7 @@ export async function PATCH(
       );
     }
 
+    // Seller rule
     if (isSeller) {
       if (
         !["confirmed", "shipped", "cancelled"].includes(status) &&
@@ -66,7 +68,10 @@ export async function PATCH(
           { status: 403 }
         );
       }
-    } else {
+    }
+
+    // Buyer rule
+    if (isBuyer) {
       if (status !== "cancelled") {
         return NextResponse.json(
           { error: "Buyers can only cancel orders" },
@@ -82,9 +87,17 @@ export async function PATCH(
     }
 
     const now = new Date();
-    const update: Partial<Order> = { status, updatedAt: now };
-    if (status === "delivered") update.actualDeliveryDate = now;
 
+    const update: Partial<Order> = {
+      status,
+      updatedAt: now,
+    };
+
+    if (status === "delivered") {
+      update.actualDeliveryDate = now;
+    }
+
+    // Restock if cancelled
     if (status === "cancelled" && order.status === "pending") {
       await products.updateOne(
         { _id: new ObjectId(order.productId) },
@@ -97,31 +110,22 @@ export async function PATCH(
 
     await orders.updateOne({ _id: new ObjectId(orderId) }, { $set: update });
 
-    // ✅ Add to manufacturer inventory if farmer ships to manufacturer
-    if (
-      status === "shipped" &&
-      order.sellerRole === "farmer" &&
-      order.buyerRole === "manufacturer"
-    ) {
-      const manufacturerInventory = db.collection("manufacturer_inventory");
-      await manufacturerInventory.insertOne({
-        productId: order.productId,
-        productName: order.productName,
-        supplierId: order.sellerId,
-        supplierName: order.sellerName,
-        batchNumber: `BATCH-${Date.now()}`,
-        quantity: order.quantity,
-        unit: order.unit,
-        location: order.shippingAddress.city,
-        status: "available",
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    // ----------------------------------
+    //  FIX 1: SAFE SHIPPING ADDRESS
+    // ----------------------------------
+    const address = order.shippingAddress ?? {
+      city: "Unknown",
+      street: "",
+      state: "",
+      country: "",
+    };
 
-    // ✅ Traceability record
+    // ----------------------------------
+    // FIX 2: CORRECT TRACEABILITY STAGE
+    // ----------------------------------
     let stage: TraceabilityRecord["stage"] = "farm";
     let description = "";
+
     switch (status) {
       case "confirmed":
         stage = "processing";
@@ -141,16 +145,19 @@ export async function PATCH(
         break;
     }
 
+    // ----------------------------------
+    // ADD TRACEABILITY RECORD
+    // ----------------------------------
     await addTraceabilityRecord({
       productId: order.productId,
       orderId: order._id!,
       stage,
       actorId: userId,
       actorName: user.name,
-      actorRole: user.role,
+      actorRole: user.role, // correct role
       location: {
-        name: order.shippingAddress.city,
-        address: `${order.shippingAddress.street}, ${order.shippingAddress.state}, ${order.shippingAddress.country}`,
+        name: address.city,
+        address: `${address.street}, ${address.state}, ${address.country}`,
       },
       action: status,
       description,
@@ -162,6 +169,9 @@ export async function PATCH(
     });
   } catch (error) {
     console.error("Update order error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

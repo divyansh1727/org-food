@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       _id: new ObjectId(),
       email,
       password: hashedPassword,
-      name: companyName, // store company/personal name
+      name: companyName,
       role,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         contactPerson,
         phone,
         address,
-        description: ${city || ""}, ${state || ""}, ${pinCode || ""},
+        description: `${city || ""}, ${state || ""}, ${pinCode || ""}`, // ✔ FIXED
       },
     }
 

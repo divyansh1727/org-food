@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { traceabilityService } from "@/lib/services/traceability-service"
+import { getProductJourney, addTraceabilityRecord } from "@/lib/services/traceability-service";
+
 import type { ProductJourney } from "@/lib/models/TraceabilityRecord"
 import { CheckCircle, AlertCircle, MapPin, Calendar, Award, TrendingUp } from "lucide-react"
 
@@ -26,7 +27,7 @@ export function ProductTraceViewer({ productId }: ProductTraceViewerProps) {
   const loadTraceData = async () => {
     setIsLoading(true)
     try {
-      const journeyData = await traceabilityService.getProductJourney(productId)
+      const journeyData = await getProductJourney(productId)
       setJourney(journeyData)
     } catch (error) {
       console.error("Error loading trace data:", error)
